@@ -84,7 +84,7 @@ async function callClaude(messages, opts={}) {
     },
     body: JSON.stringify({
       model: state.model,
-      max_tokens: opts.max_tokens || 2000,
+      max_tokens: opts.max_tokens || 4096,
       system: SYSTEM_PROMPT,
       messages
     })
