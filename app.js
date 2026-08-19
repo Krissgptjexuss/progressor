@@ -5,7 +5,8 @@ const LS = {
   routine: "progresor_routine",
   history: "progresor_history",
   chat: "progresor_chat",
-  seeded: "progresor_seeded_v1"
+  seeded: "progresor_seeded_v1",
+  draft: "progresor_draft"
 };
 const DAYS = ["Upper A", "Lower A", "Upper B", "Lower B"];
 
@@ -185,11 +186,13 @@ function renderHome(){
   for (const d of DAYS){
     const r = state.routine[d];
     const prev = priorSessions(d,null)[0];
+    const savedDraft = loadDraft();
+    const inProgress = savedDraft && savedDraft.day === d && !savedDraft.feedback;
     const c = el("button","day-card"+(d===lastDay?" last":""));
     c.innerHTML = `<div class="emoji">${r.icon}</div>
       <div class="k">${d}</div>
       <div class="sub">${r.subtitle}</div>
-      <div class="meta">${prev ? "últ: "+prev.dateISO : "sin registro aún"}</div>`;
+      <div class="meta">${inProgress ? '<span style="color:var(--ember)">● en curso</span>' : (prev ? "últ: "+prev.dateISO : "sin registro aún")}</div>`;
     c.onclick = ()=>openLog(d);
     grid.appendChild(c);
   }
@@ -204,8 +207,28 @@ function renderHome(){
 }
 
 /* ----- LOG (registrar) ----- */
+function saveDraft(){
+  if (draft) localStorage.setItem(LS.draft, JSON.stringify(draft));
+}
+function clearDraft(){
+  draft = null;
+  localStorage.removeItem(LS.draft);
+}
+function loadDraft(){
+  try { const v = localStorage.getItem(LS.draft); return v ? JSON.parse(v) : null; }
+  catch(e){ return null; }
+}
+
 function openLog(d){
   day = d;
+  const saved = loadDraft();
+  if (saved && saved.day === d && !saved.feedback) {
+    // retomar borrador en curso de este día
+    draft = saved;
+    renderLog();
+    switchTab("log");
+    return;
+  }
   const prev = priorSessions(d,null)[0];
   draft = {
     id: "s-"+Date.now(),
@@ -223,6 +246,7 @@ function openLog(d){
     }),
     feedback: ""
   };
+  saveDraft();
   renderLog();
   switchTab("log");
 }
@@ -238,6 +262,7 @@ function renderLog(){
   back.onclick = ()=>switchTab("home");
   head.appendChild(back);
   s.appendChild(head);
+  s.appendChild(el("div","hint","💾 Se guarda solo. Puedes ir a Coach o cerrar la app y al volver sigue aquí."));
 
   draft.exercises.forEach((ex, ei)=>{
     const wrap = el("div","ex");
@@ -254,7 +279,7 @@ function renderLog(){
     const body = el("div","ex-body");
     const eqn = el("div","ex-note-in");
     eqn.innerHTML = `<input placeholder="máquina/peso de referencia (ej: 27.5/lado)" value="${ex.equipmentNote||""}">`;
-    eqn.querySelector("input").oninput = e=> ex.equipmentNote = e.target.value;
+    eqn.querySelector("input").oninput = e=>{ ex.equipmentNote = e.target.value; saveDraft(); };
     body.appendChild(eqn);
 
     const sh = el("div","set-head","<span></span><span>Peso</span><span>Reps</span><span>RIR</span><span></span>");
@@ -271,10 +296,10 @@ function renderLog(){
           <input class="num" placeholder="—" value="${st.rir}">
           <button class="x">×</button>`;
         const [w,r,rir] = row.querySelectorAll("input");
-        w.oninput=e=>st.weight=e.target.value;
-        r.oninput=e=>st.reps=e.target.value;
-        rir.oninput=e=>st.rir=e.target.value;
-        row.querySelector(".x").onclick=()=>{ if(ex.sets.length>1){ex.sets.splice(si,1);drawSets();} };
+        w.oninput=e=>{st.weight=e.target.value; saveDraft();};
+        r.oninput=e=>{st.reps=e.target.value; saveDraft();};
+        rir.oninput=e=>{st.rir=e.target.value; saveDraft();};
+        row.querySelector(".x").onclick=()=>{ if(ex.sets.length>1){ex.sets.splice(si,1);drawSets();saveDraft();} };
         setsBox.appendChild(row);
       });
     }
@@ -286,12 +311,13 @@ function renderLog(){
       const last = ex.sets[ex.sets.length-1];
       ex.sets.push({weight:last?.weight||"", reps:"", rir:"", note:""});
       drawSets();
+      saveDraft();
     };
     body.appendChild(add);
 
     const note = el("div","ex-note-in");
     note.innerHTML = `<input placeholder="nota (opcional): sensación, técnica, molestia…" value="${ex.sets._note||""}">`;
-    note.querySelector("input").oninput = e=>{ ex.sets[ex.sets.length-1].note = e.target.value; };
+    note.querySelector("input").oninput = e=>{ ex.sets[ex.sets.length-1].note = e.target.value; saveDraft(); };
     body.appendChild(note);
 
     wrap.appendChild(body);
@@ -300,14 +326,25 @@ function renderLog(){
 
   const sn = el("div","card tight");
   sn.innerHTML = `<label class="fld">Nota de la sesión</label>
-    <textarea placeholder="cambios de máquina, cómo te sentiste, algo que quieras que el coach sepa…"></textarea>`;
-  sn.querySelector("textarea").oninput = e=> draft.sessionNote = e.target.value;
+    <textarea placeholder="cambios de máquina, cómo te sentiste, algo que quieras que el coach sepa…">${draft.sessionNote||""}</textarea>`;
+  sn.querySelector("textarea").oninput = e=>{ draft.sessionNote = e.target.value; saveDraft(); };
   s.appendChild(sn);
 
   const submit = el("button","btn primary","Registrar y pedir feedback");
   submit.onclick = submitSession;
   s.appendChild(submit);
   s.appendChild(el("div","hint","El coach comparará con tu última "+draft.day+" y te dará objetivos para la próxima."));
+
+  const discard = el("button","btn danger","Descartar y empezar de cero");
+  discard.style.marginTop="10px";
+  discard.onclick = ()=>{
+    if(confirm("¿Borrar lo que llevas registrado en "+draft.day+"?")){
+      clearDraft();
+      toast("Borrador descartado");
+      switchTab("home");
+    }
+  };
+  s.appendChild(discard);
 }
 
 async function submitSession(){
@@ -326,12 +363,13 @@ async function submitSession(){
     draft.feedback = fb;
     state.history.push(draft);
     persist();
-    showFeedback(draft);
+    const done = draft;
+    clearDraft();
+    showFeedback(done);
   }catch(err){
     btn.disabled=false; btn.innerHTML="Registrar y pedir feedback";
     toast(err.message);
-    // guardar igual sin feedback, para no perder los datos
-    if(!state.history.find(h=>h.id===draft.id)){ state.history.push({...draft}); persist(); }
+    // el borrador ya está autoguardado; no se pierde nada. Puedes reintentar.
   }
 }
 
