@@ -230,20 +230,30 @@ function openLog(d){
     return;
   }
   const prev = priorSessions(d,null)[0];
+  let exercises;
+  if (prev) {
+    // arrastrar lo que usó la última vez: mismos ejercicios, misma máquina/nota
+    exercises = prev.exercises.map(pe => ({
+      name: pe.name,
+      equipmentNote: pe.equipmentNote || "",
+      _prev: pe,
+      sets: [ {weight:"", reps:"", rir:"", note:""} ]
+    }));
+  } else {
+    // primera vez: usar la rutina base
+    exercises = state.routine[d].exercises.map(name => ({
+      name,
+      equipmentNote: "",
+      _prev: null,
+      sets: [ {weight:"", reps:"", rir:"", note:""} ]
+    }));
+  }
   draft = {
     id: "s-"+Date.now(),
     day: d,
     dateISO: new Date().toISOString().slice(0,10),
     sessionNote: "",
-    exercises: state.routine[d].exercises.map((name, i)=>{
-      const pe = prev ? prev.exercises[i] : null;
-      return {
-        name,
-        equipmentNote: "",
-        _prev: pe || null,
-        sets: [ {weight:"", reps:"", rir:"", note:""} ]
-      };
-    }),
+    exercises,
     feedback: ""
   };
   saveDraft();
@@ -269,17 +279,38 @@ function renderLog(){
     const prevStr = ex._prev
       ? ex._prev.sets.map(x=>`${x.weight}×${x.reps}${x.rir&&x.rir!=="—"?"("+x.rir+")":""}`).join(" · ")
       : null;
+    const prevEq = ex._prev && ex._prev.equipmentNote ? ex._prev.equipmentNote : null;
+
     const h = el("div","ex-head");
-    h.innerHTML = `<div style="flex:1">
-        <div class="ex-name">${ex.name}</div>
-        ${prevStr ? `<div class="ex-prev">últ: <b>${prevStr}</b></div>` : `<div class="ex-prev">— primera vez —</div>`}
-      </div>`;
+    const nameWrap = el("div"); nameWrap.style.flex="1"; nameWrap.style.minWidth="0";
+    const nameInput = el("input","ex-name-input");
+    nameInput.value = ex.name;
+    nameInput.placeholder = "nombre del ejercicio";
+    nameInput.oninput = e=>{ ex.name = e.target.value; saveDraft(); };
+    nameWrap.appendChild(nameInput);
+    const prevLine = el("div","ex-prev");
+    prevLine.innerHTML = prevStr
+      ? `últ: <b>${prevStr}</b>${prevEq?` · <span style="color:var(--muted-2)">${prevEq}</span>`:""}`
+      : "— primera vez —";
+    nameWrap.appendChild(prevLine);
+    h.appendChild(nameWrap);
+
+    const rm = el("button","ex-remove","quitar");
+    rm.onclick = ()=>{
+      if(confirm("¿Quitar \""+(ex.name||"este ejercicio")+"\" de esta sesión?")){
+        draft.exercises.splice(ei,1); saveDraft(); renderLog();
+      }
+    };
+    h.appendChild(rm);
     wrap.appendChild(h);
 
     const body = el("div","ex-body");
     const eqn = el("div","ex-note-in");
-    eqn.innerHTML = `<input placeholder="máquina/peso de referencia (ej: 27.5/lado)" value="${ex.equipmentNote||""}">`;
-    eqn.querySelector("input").oninput = e=>{ ex.equipmentNote = e.target.value; saveDraft(); };
+    const eqInput = el("input");
+    eqInput.placeholder = "máquina/peso de referencia (ej: 27.5/lado)";
+    eqInput.value = ex.equipmentNote || "";
+    eqInput.oninput = e=>{ ex.equipmentNote = e.target.value; saveDraft(); };
+    eqn.appendChild(eqInput);
     body.appendChild(eqn);
 
     const sh = el("div","set-head","<span></span><span>Peso</span><span>Reps</span><span>RIR</span><span></span>");
@@ -324,6 +355,15 @@ function renderLog(){
     s.appendChild(wrap);
   });
 
+  const addEx = el("button","add-set","+ agregar ejercicio");
+  addEx.style.marginBottom="12px";
+  addEx.onclick = ()=>{
+    draft.exercises.push({ name:"", equipmentNote:"", _prev:null, sets:[{weight:"",reps:"",rir:"",note:""}] });
+    saveDraft(); renderLog();
+    window.scrollTo(0, document.body.scrollHeight);
+  };
+  s.appendChild(addEx);
+
   const sn = el("div","card tight");
   sn.innerHTML = `<label class="fld">Nota de la sesión</label>
     <textarea placeholder="cambios de máquina, cómo te sentiste, algo que quieras que el coach sepa…">${draft.sessionNote||""}</textarea>`;
@@ -348,11 +388,12 @@ function renderLog(){
 }
 
 async function submitSession(){
-  // limpiar series vacías
+  // limpiar series vacías y ejercicios vacíos sin nombre
   draft.exercises.forEach(ex=>{
     ex.sets = ex.sets.filter(st => (st.weight||"").trim() || (st.reps||"").trim());
     delete ex._prev;
   });
+  draft.exercises = draft.exercises.filter(ex => (ex.name||"").trim() || ex.sets.length);
   const hasData = draft.exercises.some(ex=>ex.sets.length);
   if(!hasData){ toast("Anota al menos una serie 💪"); return; }
 

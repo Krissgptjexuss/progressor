@@ -105,6 +105,10 @@ textarea{resize:vertical;min-height:60px;line-height:1.45}
 .ex{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
 .ex-head{padding:13px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line)}
 .ex-name{font-family:"Archivo";font-weight:700;font-size:15.5px;line-height:1.25}
+.ex-name-input{font-family:"Archivo";font-weight:700;font-size:15.5px;line-height:1.25;color:var(--ink);background:transparent;border:none;border-bottom:1px dashed transparent;border-radius:0;padding:1px 0;width:100%}
+.ex-name-input:focus{border-bottom-color:var(--steel);outline:none}
+.ex-remove{background:none;border:none;color:var(--muted-2);font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.06em;cursor:pointer;padding:3px 4px;flex:none;text-transform:uppercase}
+.ex-remove:active{color:var(--ember)}
 .ex-prev{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
 .ex-prev b{color:var(--steel);font-weight:500}
 .ex-body{padding:10px 12px 13px}

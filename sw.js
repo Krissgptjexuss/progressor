@@ -1,4 +1,5 @@
-const CACHE = "progresor-v1";
+// Sube este número cada vez que cambies archivos para forzar actualización.
+const CACHE = "progresor-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -22,18 +23,20 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
-  // nunca cachear llamadas a la API de Claude
   if (url.hostname.includes("anthropic.com")) return;
-  // no cachear fuentes de google (dejar que el navegador las maneje)
   if (url.hostname.includes("gstatic") || url.hostname.includes("googleapis")) return;
-  e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-      // cachear solo mismos-origen GET
-      if (e.request.method === "GET" && url.origin === location.origin) {
+  if (e.request.method !== "GET") return;
+
+  // RED PRIMERO para archivos propios: al abrir con internet siempre cargas lo ultimo.
+  if (url.origin === location.origin) {
+    e.respondWith(
+      fetch(e.request).then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
-      }
-      return res;
-    }).catch(() => caches.match("./index.html")))
-  );
+        return res;
+      }).catch(() => caches.match(e.request).then(hit => hit || caches.match("./index.html")))
+    );
+    return;
+  }
+  e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request)));
 });
